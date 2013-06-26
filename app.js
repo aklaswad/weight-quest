@@ -1,5 +1,5 @@
 var mongo = require('mongodb');
-var notifier = require('mail-notifier');
+var mailNotifier = require('mail-notifier');
 var Twit = require('twit');
 var config = require('./config.js');
 var log = console.log;
@@ -109,18 +109,31 @@ Player.prototype = {
   }
 };
 
-notifier(config.imap).on('mail', function (mail) {
-  if ( mail.subject.match(/^\[withings\]/) ) {
-    var json;
-    try {
-      json = JSON.parse(mail.html);
-    }
-    catch (e) {
+var notifier;
+var initNotifier = function () {
+  notifier = mailNotifier(config.imap)
+    .on('mail', function (mail) {
+      if ( mail.subject.match(/^\[withings\]/) ) {
+        var json;
+        try {
+          json = JSON.parse(mail.html);
+        }
+        catch (e) {
+          log(e);
+          return;
+        }
+        player.update(json.weight);
+      }
+    })
+    .on('error', function (e) {
       log(e);
-      return;
-    }
-    player.update(json.weight);
-  }
-}).start();
-
-
+      initNotifier();
+    })
+    .on('end', function () {
+      log('imap connection end');
+      initNotifier();
+    })
+    .start()
+  ;
+};
+initNotifier();
